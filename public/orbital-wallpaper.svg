@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" fill="none">
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#223c51"/>
+      <stop offset=".54" stop-color="#355d69"/>
+      <stop offset="1" stop-color="#546d64"/>
+    </linearGradient>
+    <linearGradient id="land" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#446866"/>
+      <stop offset="1" stop-color="#253d40"/>
+    </linearGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0v48" stroke="#b2c3b2" opacity=".14"/>
+      <path d="M0 0h3M0 0v3" stroke="#b2c3b2" opacity=".35"/>
+    </pattern>
+    <pattern id="raster" width="4" height="4" patternUnits="userSpaceOnUse">
+      <path d="M0 .5h4" stroke="#101f27" opacity=".13"/>
+    </pattern>
+  </defs>
+  <path fill="url(#sky)" d="M0 0h1440v900H0z"/>
+  <path stroke="#779b9c" opacity=".45" d="M0 630c266-81 443-114 652-103 237 12 478 123 788 12M0 645c260-72 456-105 663-93 258 18 459 119 777 8"/>
+  <path fill="#466a6b" d="m0 690 78-40 119-21 93-55 48 10 108-50 139 56 123-37 137 36 121-21 104-46 101-27 89 22 88-67 92 8v442H0Z"/>
+  <path fill="url(#land)" d="m0 732 92-37 131-7 119-42 119 5 122-35 110 48 83-26 137 39 117-32 146-10 132-63 132 9v319H0Z"/>
+  <g stroke="#95ada0" opacity=".35">
+    <path d="M0 737q111-50 240-35t235-37 219 12 162 13 178-23 189-34 217-38"/>
+    <path d="M0 758q120-46 239-35t236-32 216 14 166 17 178-18 196-44 209-45"/>
+    <path d="M0 781q120-49 245-32t229-29 207 19 171 17 182-18 200-47 206-45"/>
+    <path d="M0 808q126-42 242-26t238-24 203 21 184 15 181-18 186-46 206-58"/>
+    <path d="M0 840q133-44 251-22t224-24 199 23 188 18 192-22 184-40 202-71"/>
+    <path d="M0 875q129-37 253-22t228-17 196 24 190 11 199-21 176-50 198-70"/>
+    <path d="M194 900q168-12 260-31t191 31m396 0q125-33 202-65t197-74"/>
+  </g>
+  <path fill="url(#grid)" d="M0 0h1440v900H0z"/>
+  <g stroke="#b4cbbe" opacity=".24">
+    <circle cx="1095" cy="205" r="170"/><circle cx="1095" cy="205" r="218"/>
+    <path d="M1095 0v436m-229-231h458M50 109V55h54m1232 0h54v54M50 787v54h54m1232 0h54v-54"/>
+    <path stroke-dasharray="2 7" d="M1095 12a193 193 0 1 1 0 386 193 193 0 0 1 0-386Z"/>
+  </g>
+  <path fill="url(#raster)" d="M0 0h1440v900H0z"/>
+</svg>
