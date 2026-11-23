@@ -15,12 +15,18 @@ export type CatalogCategory = Category | "All";
 
 export function ItemCatalog({
 	items,
+	source,
+	page,
+	onPageChange,
 	query,
 	category,
 	onQueryChange,
 	onCategoryChange,
 }: {
-	items: readonly CatalogItem[];
+	items: readonly Omit<CatalogItem, "components">[];
+	source: "wfcd" | "sample";
+	page: number;
+	onPageChange: (page: number) => void;
 	query: string;
 	category: CatalogCategory;
 	onQueryChange: (query: string) => void;
@@ -34,12 +40,22 @@ export function ItemCatalog({
 			`${item.name} ${item.category}`.toLowerCase().includes(term),
 	);
 
+	const pageSize = 24;
+	const pageCount = Math.max(1, Math.ceil(results.length / pageSize));
+	const currentPage = Math.min(page, pageCount);
+	const visible = results.slice(
+		(currentPage - 1) * pageSize,
+		currentPage * pageSize,
+	);
+
 	return (
 		<Window
 			title="Item Catalog — Equipment Index"
 			icon={FolderOpen}
 			status={
-				<StatusBar end="Local sample catalog">
+				<StatusBar
+					end={source === "wfcd" ? "WFCD equipment catalog" : "Sample catalog"}
+				>
 					<span aria-live="polite">
 						{results.length} of {items.length} items
 					</span>
@@ -50,8 +66,9 @@ export function ItemCatalog({
 				<div className="page-heading">
 					<h1>Item Catalog</h1>
 					<p>
-						Browse sample Prime equipment and open a file to inspect its
-						components.
+						{source === "wfcd"
+							? "Browse Prime equipment and open a file to inspect its components."
+							: "WFCD equipment is unavailable. Showing the local sample catalog."}
 					</p>
 				</div>
 				<div className="catalog-toolbar">
@@ -106,10 +123,11 @@ export function ItemCatalog({
 					<RetroPanel className="catalog-results">
 						{results.length ? (
 							<ul className={`catalog-items catalog-items--${view}`}>
-								{results.map((item) => (
+								{visible.map((item) => (
 									<li key={item.slug}>
 										<Link
 											to="/items/$slug"
+											preload={false}
 											params={{ slug: item.slug }}
 											className="catalog-file"
 										>
@@ -136,6 +154,25 @@ export function ItemCatalog({
 								<Search size={28} aria-hidden="true" />
 								<h2>No matching equipment</h2>
 								<p>Try another name or select a different category.</p>
+							</div>
+						)}
+						{pageCount > 1 && (
+							<div className="catalog-pagination">
+								<RetroButton
+									disabled={currentPage === 1}
+									onClick={() => onPageChange(currentPage - 1)}
+								>
+									Previous
+								</RetroButton>
+								<span aria-live="polite">
+									Page {currentPage} of {pageCount}
+								</span>
+								<RetroButton
+									disabled={currentPage === pageCount}
+									onClick={() => onPageChange(currentPage + 1)}
+								>
+									Next
+								</RetroButton>
 							</div>
 						)}
 					</RetroPanel>

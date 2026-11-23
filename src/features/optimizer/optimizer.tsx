@@ -5,6 +5,7 @@ import { RetroInput, RetroPanel, StatusBar } from "#/components/retro/controls";
 import { Window } from "#/components/retro/window";
 import {
 	describeSource,
+	dropDataLabel,
 	getDropChance,
 	prioritizeSources,
 } from "#/features/catalog/catalog";
@@ -20,10 +21,12 @@ import { ComponentPrices } from "./component-prices";
 
 export function Optimizer({
 	items,
+	catalogSource,
 	item,
 	onItemChange,
 }: {
-	items: readonly CatalogItem[];
+	items: readonly Pick<CatalogItem, "slug" | "name">[];
+	catalogSource: "wfcd" | "sample";
 	item: CatalogItem;
 	onItemChange: (slug: string) => void;
 }) {
@@ -41,7 +44,9 @@ export function Optimizer({
 		return bestChance ? (component.quantity * 100) / bestChance : undefined;
 	});
 	const totalOpenings =
-		item.dropData && openingCosts.every((cost) => cost !== undefined)
+		item.components.length > 0 &&
+		item.dropData &&
+		openingCosts.every((cost) => cost !== undefined)
 			? openingCosts.reduce<number>((sum, cost) => sum + (cost ?? 0), 0)
 			: undefined;
 	const value = Number(openingValue);
@@ -69,7 +74,7 @@ export function Optimizer({
 			title="Farming Optimizer — Acquisition Planner"
 			icon={ChartNoAxesCombined}
 			status={
-				<StatusBar end={item.dropData ? "WFCD drop tables" : "Sample drops"}>
+				<StatusBar end={dropDataLabel(item)}>
 					{item.components.length} component types · {refinement}
 				</StatusBar>
 			}
@@ -77,6 +82,9 @@ export function Optimizer({
 			<div className="window-body">
 				<div className="page-heading">
 					<h1>Farming Optimizer</h1>
+					{catalogSource === "sample" && (
+						<p>WFCD equipment unavailable. Showing the sample catalog.</p>
+					)}
 					<p>
 						Compare component sources and relic refinements for your next farm.
 					</p>
@@ -124,6 +132,11 @@ export function Optimizer({
 					</Link>
 				</div>
 				<h2 className="section-caption">Acquisition comparison</h2>
+				{item.components.length === 0 && (
+					<p className="data-note">
+						No Prime recipe components are listed for this item.
+					</p>
+				)}
 				<RetroPanel className="table-scroll">
 					<table className="retro-table">
 						<caption className="sr-only">
@@ -244,11 +257,13 @@ export function Optimizer({
 						)}
 					</RetroPanel>
 				</div>
-				<ComponentPrices
-					key={item.slug}
-					item={item}
-					openingCosts={openingCosts}
-				/>
+				{item.components.length > 0 && (
+					<ComponentPrices
+						key={item.slug}
+						item={item}
+						openingCosts={openingCosts}
+					/>
+				)}
 			</div>
 		</Window>
 	);

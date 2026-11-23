@@ -50,7 +50,7 @@ export function Taskbar() {
 				))}
 			</nav>
 			<div className="taskbar-tray">
-				<span className="lamp" /> Local data
+				<span className="lamp" /> Field Desk
 			</div>
 		</footer>
 	);

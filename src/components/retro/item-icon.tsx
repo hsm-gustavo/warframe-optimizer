@@ -1,4 +1,21 @@
 const illustrations = {
+	sentinel: (
+		<>
+			<path
+				fill="var(--art-shadow)"
+				d="M6 22l12 1 8-9h12l8 9 12-1-4 20-11-4-11 13-11-13-11 4z"
+			/>
+			<path
+				fill="var(--art-metal)"
+				d="M10 26l11 2 7-10h8l7 10 11-2-3 11-10-3-9 11-9-11-10 3z"
+			/>
+			<path fill="var(--art-light)" d="M25 27l7-9 7 9-7 12z" />
+			<path
+				fill="var(--art-accent)"
+				d="M28 27l4-3 4 3-4 5zM14 28l5 1-3 3zm36 0-5 1 3 3z"
+			/>
+		</>
+	),
 	frame: (
 		<>
 			<path

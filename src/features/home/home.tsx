@@ -11,7 +11,7 @@ import {
 import { RetroPanel, StatusBar } from "#/components/retro/controls";
 import { ItemIcon } from "#/components/retro/item-icon";
 import { Window } from "#/components/retro/window";
-import { listItems } from "#/features/catalog/catalog";
+import type { loadDesktopCatalog } from "#/features/catalog/item-data";
 
 function ArchiveIllustration() {
 	return (
@@ -62,9 +62,12 @@ function ArchiveIllustration() {
 	);
 }
 
-export function Home() {
-	const items = listItems();
-	const featured = items.slice(0, 3);
+export function Home({
+	catalog,
+}: {
+	catalog: Awaited<ReturnType<typeof loadDesktopCatalog>>;
+}) {
+	const { featured, count, source } = catalog;
 
 	return (
 		<div className="home-layout">
@@ -132,7 +135,9 @@ export function Home() {
 							<div>
 								<span className="lamp" />
 								<span>Item catalog</span>
-								<strong>Sample</strong>
+								<strong>
+									{source === "wfcd" ? "WFCD" : "Sample fallback"}
+								</strong>
 							</div>
 							<div>
 								<span className="lamp lamp-amber" />
@@ -146,7 +151,11 @@ export function Home() {
 							</div>
 						</RetroPanel>
 						<p className="utility-note">
-							{items.length} equipment records in the local sample catalog.
+							{count} Prime equipment records
+							{source === "sample"
+								? " in the local sample catalog"
+								: " from WFCD"}
+							.
 						</p>
 					</div>
 				</Window>

@@ -1,13 +1,4 @@
-import { fixtureItems } from "./fixtures";
-import type { DropSource, Refinement } from "./models";
-
-export function listItems() {
-	return fixtureItems;
-}
-
-export function findItem(slug: string) {
-	return listItems().find((item) => item.slug === slug);
-}
+import type { CatalogItem, DropSource, Refinement } from "./models";
 
 export function getDropChance(source: DropSource, refinement: Refinement) {
 	return source.kind === "relic"
@@ -35,4 +26,11 @@ export function prioritizeSources(
 			(getDropChance(b, refinement) ?? 0) - (getDropChance(a, refinement) ?? 0)
 		);
 	});
+}
+
+export function dropDataLabel(item: CatalogItem) {
+	if (item.dropData) return "WFCD drop tables";
+	return item.components.some((part) => part.sources.length)
+		? "Sample drops"
+		: "Drop data unavailable";
 }

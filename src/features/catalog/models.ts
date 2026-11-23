@@ -5,6 +5,9 @@ export const categories = [
 	"Primary",
 	"Secondary",
 	"Melee",
+	"Arch-Gun",
+	"Sentinel",
+	"Sentinel Weapon",
 ] as const;
 export type Category = (typeof categories)[number];
 

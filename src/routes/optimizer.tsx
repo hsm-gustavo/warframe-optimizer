@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { findItem, listItems } from "#/features/catalog/catalog";
-import { loadEquipmentRecord } from "#/features/catalog/item-data";
+import { loadOptimizer } from "#/features/catalog/item-data";
 import { Optimizer } from "#/features/optimizer/optimizer";
 
 export const Route = createFileRoute("/optimizer")({
@@ -8,17 +7,13 @@ export const Route = createFileRoute("/optimizer")({
 		item: typeof search.item === "string" ? search.item : undefined,
 	}),
 	loaderDeps: ({ search }) => ({ item: search.item }),
-	loader: ({ deps }) =>
-		loadEquipmentRecord({
-			data: findItem(deps.item ?? "")?.slug ?? "burston-prime",
-		}),
+	loader: ({ deps }) => loadOptimizer({ data: deps.item }),
 	component: OptimizerPage,
 	head: () => ({ meta: [{ title: "Farming Optimizer | Orbital Field Desk" }] }),
 });
 
 function OptimizerPage() {
-	const items = listItems();
-	const item = Route.useLoaderData();
+	const { items, item, source } = Route.useLoaderData();
 	const navigate = Route.useNavigate();
 
 	if (!item)
@@ -26,6 +21,7 @@ function OptimizerPage() {
 
 	return (
 		<Optimizer
+			catalogSource={source}
 			items={items}
 			item={item}
 			onItemChange={(slug) =>

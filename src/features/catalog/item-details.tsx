@@ -3,7 +3,12 @@ import { ArrowLeft, ChartNoAxesCombined, FileText } from "lucide-react";
 import { RetroPanel, StatusBar } from "#/components/retro/controls";
 import { ItemIcon } from "#/components/retro/item-icon";
 import { Window } from "#/components/retro/window";
-import { describeSource, getDropChance, prioritizeSources } from "./catalog";
+import {
+	describeSource,
+	dropDataLabel,
+	getDropChance,
+	prioritizeSources,
+} from "./catalog";
 import type { CatalogItem } from "./models";
 
 export function ItemDetails({ item }: { item: CatalogItem }) {
@@ -11,11 +16,7 @@ export function ItemDetails({ item }: { item: CatalogItem }) {
 		<Window
 			title={`${item.name} — File Properties`}
 			icon={FileText}
-			status={
-				<StatusBar end={item.dropData ? "WFCD drop tables" : "Sample drops"}>
-					Equipment record
-				</StatusBar>
-			}
+			status={<StatusBar end={dropDataLabel(item)}>Equipment record</StatusBar>}
 		>
 			<div className="window-body">
 				<Link to="/items" className="back-link">
@@ -41,6 +42,11 @@ export function ItemDetails({ item }: { item: CatalogItem }) {
 				<div className="details-layout">
 					<section>
 						<h2 className="section-caption">Required Prime components</h2>
+						{item.components.length === 0 && (
+							<p className="data-note">
+								No Prime recipe components are listed for this item.
+							</p>
+						)}
 						<RetroPanel className="table-scroll">
 							<table className="retro-table">
 								<caption className="sr-only">
@@ -129,7 +135,7 @@ export function MissingItem() {
 			<div className="empty-state">
 				<FileText size={30} aria-hidden="true" />
 				<h1>Equipment file not found</h1>
-				<p>This item is missing from the local sample catalog.</p>
+				<p>This item is missing from the Prime equipment catalog.</p>
 				<Link to="/items" className="retro-button">
 					Open Item Catalog
 				</Link>

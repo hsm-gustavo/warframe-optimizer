@@ -5,7 +5,7 @@ import {
 } from "@tanstack/react-start/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { findItem, listItems } from "#/features/catalog/catalog";
+import { getCatalog } from "#/integrations/warframe/equipment.server";
 
 export const personalViewIds = ["inventory", "wishlist", "history"] as const;
 export type PersonalView = (typeof personalViewIds)[number];
@@ -22,6 +22,7 @@ export const loadPersonalFiles = createServerFn().handler(async () => {
 
 	const { db } = await import("#/db/index");
 	const { personalEntry } = await import("#/db/schema");
+	const catalog = getCatalog();
 	const entries = await db
 		.select({
 			view: personalEntry.view,
@@ -35,7 +36,7 @@ export const loadPersonalFiles = createServerFn().handler(async () => {
 
 	return {
 		user: { name: session.user.name, role: session.user.role },
-		items: listItems().map(({ slug, name }) => ({ slug, name })),
+		items: (await catalog).items.map(({ slug, name }) => ({ slug, name })),
 		entries,
 	};
 });
@@ -74,7 +75,9 @@ export const savePersonalEntry = createServerFn({ method: "POST" })
 					),
 				);
 		} else {
-			if (!findItem(data.itemSlug)) throw new Error("Unknown equipment.");
+			const { items } = await getCatalog();
+			if (!items.some((item) => item.slug === data.itemSlug))
+				throw new Error("Unknown equipment.");
 			const quantity = data.view === "inventory" ? data.quantity : 1;
 			await db
 				.insert(personalEntry)
