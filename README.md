@@ -1,10 +1,10 @@
 # Orbital Field Desk
 
-A KIM-inspired Warframe farming workspace built with TanStack Start. The desktop, catalog, item records, and optimizer are public. Personal Files reads the existing Better Auth session and previews Inventory, Wishlist, and Farming History.
+A KIM-inspired Warframe farming workspace built with TanStack Start. The desktop, catalog, item records, and optimizer are public. Personal Files uses PostgreSQL-backed Better Auth sessions for Inventory, Wishlist, and Farming History.
 
 The shared desktop controls live in `src/components/retro`. The public routes use server-rendered TanStack loaders and a typed catalog in `src/features/catalog`. The catalog uses eight local equipment fixtures with selected relic drops and published [refinement odds](https://wiki.warframe.com/w/Void_Relic). Sample relics can be vaulted. The optimizer estimates openings per drop from a single relic roll.
 
-The live [WFCD drop table import](https://github.com/WFCD/warframe-drop-data) and [Warframe.market integration](https://docs.warframe.market/) are pending. The market adapter belongs on the server, with a short-lived cache, in-flight request deduplication, and rate limiting before components receive quotes. The personal workspace will need a sign-in screen, persistent auth storage, and session-checked reads and writes before it can save progress.
+The live [WFCD drop table import](https://github.com/WFCD/warframe-drop-data) and [Warframe.market integration](https://docs.warframe.market/) are pending. The market adapter belongs on the server, with a short-lived cache, in-flight request deduplication, and rate limiting before components receive quotes.
 
 # Getting Started
 
@@ -71,40 +71,16 @@ pnpm dlx shadcn@latest add button
 ```
 
 
-## Setting up Better Auth
+## Local accounts
 
-1. Generate and set the `BETTER_AUTH_SECRET` environment variable in your `.env.local`:
-
-   ```bash
-   pnpm dlx @better-auth/cli secret
-   ```
-
-2. Visit the [Better Auth documentation](https://www.better-auth.com) to unlock the full potential of authentication in your app.
-
-### Adding a Database (Optional)
-
-Better Auth can work in stateless mode, but to persist user data, add a database:
-
-```typescript
-// src/lib/auth.ts
-import { betterAuth } from "better-auth";
-import { Pool } from "pg";
-
-export const auth = betterAuth({
-  database: new Pool({
-    connectionString: process.env.DATABASE_URL,
-  }),
-  // ... rest of config
-});
-```
-
-Then run migrations:
+Set `DATABASE_URL` and `BETTER_AUTH_URL` in `.env.local` to point to the local PostgreSQL service and the app. Generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32`. Run the migrations, then bootstrap and verify the test administrator.
 
 ```bash
-pnpm dlx @better-auth/cli migrate
+pnpm db:migrate
+pnpm db:admin
 ```
 
-
+Sign in at `/app` as `admin@orbital.test`. The bootstrap writes the generated password to the ignored `.admin-credentials.local` file with owner-only permissions. The personal workspace stores item quantities, wishlist entries, and the most recent acquisition date per item. Each read and write checks the session and scopes records to its user.
 
 ## Routing
 

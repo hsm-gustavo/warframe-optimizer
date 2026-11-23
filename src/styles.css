@@ -353,3 +353,11 @@ a:hover { text-decoration-thickness: 2px; }
 @media (prefers-reduced-motion: reduce) {
   .retro-button:active { transform: none; }
 }
+
+.sign-in-form { display: grid; gap: 11px; max-width: 320px; }
+.sign-in-form .retro-button { justify-self: start; }
+.personal-toolbar { display: flex; justify-content: end; margin-bottom: 9px; }
+.personal-list { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--ui-shadow); }
+.personal-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding: 7px 3px; border-bottom: 1px solid var(--ui-shadow); }
+.personal-list li button { margin-left: auto; }
+.form-message { color: #73392c; margin-top: 12px; }

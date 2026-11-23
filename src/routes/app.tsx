@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { loadPersonalFiles } from "#/features/personal/personal-data";
 import {
 	PersonalFiles,
 	personalViews,
@@ -10,6 +11,7 @@ export const Route = createFileRoute("/app")({
 	): { view?: (typeof personalViews)[number]["value"] } => ({
 		view: personalViews.find((tab) => tab.value === search.view)?.value,
 	}),
+	loader: () => loadPersonalFiles(),
 	component: PersonalPage,
 	head: () => ({ meta: [{ title: "Personal Files | Orbital Field Desk" }] }),
 });
@@ -20,6 +22,7 @@ function PersonalPage() {
 
 	return (
 		<PersonalFiles
+			data={Route.useLoaderData()}
 			view={view ?? "inventory"}
 			onViewChange={(value) => {
 				const next = personalViews.find((tab) => tab.value === value);
