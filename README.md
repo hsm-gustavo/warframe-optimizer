@@ -75,6 +75,10 @@ pnpm dlx shadcn@latest add button
 
 Set `POSTGRES_PASSWORD` in the ignored `.env` file, then run `docker compose up -d postgres`. PostgreSQL binds only to localhost and stores data in the Compose volume. Use the same password in `DATABASE_URL` in `.env.local`.
 
+## Local Redis cache
+
+Run `docker compose up -d redis` and set `REDIS_URL=redis://127.0.0.1:6378` in `.env.local` when running the app on the host. Redis shares WFCD responses for one hour and Warframe.market quotes for two minutes across app processes. Request deduplication and market pacing stay per process. The server falls back to its in-memory cache when Redis is unavailable or the URL is unset.
+
 ## Local accounts
 
 Set `DATABASE_URL` and `BETTER_AUTH_URL` in `.env.local` to point to the local PostgreSQL service and the app. Generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32`. Run the migrations, then bootstrap and verify the test administrator.

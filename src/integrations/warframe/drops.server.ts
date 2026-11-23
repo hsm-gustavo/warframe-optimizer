@@ -47,6 +47,7 @@ async function getFeed<T>(file: string, schema: z.ZodType<T>): Promise<T> {
 }
 
 const getRelics = createTimedLookup(
+	"wfcd:relics",
 	() => getFeed("relics", relicFeed),
 	3_600_000,
 	60_000,
@@ -55,9 +56,10 @@ const getRelics = createTimedLookup(
 type MissionDrop = { location: string; rotation?: string; probability: number };
 
 const getMissions = createTimedLookup(
+	"wfcd:missions",
 	async () => {
 		const { missionRewards } = await getFeed("missionRewards", missionFeed);
-		const missions = new Map<string, MissionDrop[]>();
+		const missions = new Map<string, MissionDrop>();
 
 		for (const [planet, nodes] of Object.entries(missionRewards)) {
 			for (const [node, mission] of Object.entries(nodes)) {
@@ -74,20 +76,18 @@ const getMissions = createTimedLookup(
 						)
 							continue;
 						seen.add(reward.itemName);
-						const drops = missions.get(reward.itemName) ?? [];
-						drops.push({
+						const best = missions.get(reward.itemName);
+						if (best && best.probability >= reward.chance) continue;
+						missions.set(reward.itemName, {
 							location: `${node}, ${planet}`,
 							rotation: rotation || undefined,
 							probability: reward.chance,
 						});
-						missions.set(reward.itemName, drops);
 					}
 				}
 			}
 		}
-		for (const drops of missions.values())
-			drops.sort((a, b) => b.probability - a.probability);
-		return missions;
+		return Object.fromEntries(missions);
 	},
 	3_600_000,
 	60_000,
@@ -149,7 +149,7 @@ export async function withLiveDrops(item: CatalogItem): Promise<CatalogItem> {
 				sources ?? [],
 				([name, probabilities]) => ({
 					kind: "relic",
-					relic: { name, missionDrop: missions?.get(`${name} Relic`)?.[0] },
+					relic: { name, missionDrop: missions?.[`${name} Relic`] },
 					probabilities,
 					rarity: rarityFromIntactChance(probabilities.Intact),
 				}),

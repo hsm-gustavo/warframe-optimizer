@@ -19,6 +19,7 @@ let nextRequestAt = 0;
 let backedOffUntil = 0;
 
 export const getMarketQuote = createTimedLookup(
+	"market:pc",
 	async (slug: string): Promise<MarketQuote | undefined> => {
 		const request = queue.then(async () => {
 			if (Date.now() < backedOffUntil)
