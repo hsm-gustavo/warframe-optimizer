@@ -1,10 +1,10 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { findItem } from "#/features/catalog/catalog";
+import { loadEquipmentRecord } from "#/features/catalog/item-data";
 import { ItemDetails, MissingItem } from "#/features/catalog/item-details";
 
 export const Route = createFileRoute("/items/$slug")({
-	loader: ({ params }) => {
-		const item = findItem(params.slug);
+	loader: async ({ params }) => {
+		const item = await loadEquipmentRecord({ data: params.slug });
 		if (!item) throw notFound();
 		return item;
 	},

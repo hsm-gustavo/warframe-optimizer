@@ -361,3 +361,8 @@ a:hover { text-decoration-thickness: 2px; }
 .personal-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding: 7px 3px; border-bottom: 1px solid var(--ui-shadow); }
 .personal-list li button { margin-left: auto; }
 .form-message { color: #73392c; margin-top: 12px; }
+.relic-node { display: block; }
+.comparison-value { margin-top: 8px; max-width: 235px; }
+.component-prices { margin-top: 14px; }
+.component-price-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 7px; margin-bottom: 6px; }
+.component-price-toolbar h2 { margin-bottom: 0; }

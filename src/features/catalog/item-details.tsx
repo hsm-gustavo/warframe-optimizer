@@ -3,7 +3,7 @@ import { ArrowLeft, ChartNoAxesCombined, FileText } from "lucide-react";
 import { RetroPanel, StatusBar } from "#/components/retro/controls";
 import { ItemIcon } from "#/components/retro/item-icon";
 import { Window } from "#/components/retro/window";
-import { describeSource, getDropChance } from "./catalog";
+import { describeSource, getDropChance, prioritizeSources } from "./catalog";
 import type { CatalogItem } from "./models";
 
 export function ItemDetails({ item }: { item: CatalogItem }) {
@@ -11,7 +11,11 @@ export function ItemDetails({ item }: { item: CatalogItem }) {
 		<Window
 			title={`${item.name} — File Properties`}
 			icon={FileText}
-			status={<StatusBar end="Sample data">Equipment record</StatusBar>}
+			status={
+				<StatusBar end={item.dropData ? "WFCD drop tables" : "Sample drops"}>
+					Equipment record
+				</StatusBar>
+			}
 		>
 			<div className="window-body">
 				<Link to="/items" className="back-link">
@@ -51,56 +55,64 @@ export function ItemDetails({ item }: { item: CatalogItem }) {
 									</tr>
 								</thead>
 								<tbody>
-									{item.components.map((part) => (
-										<tr key={part.name}>
-											<th scope="row">{part.name}</th>
-											<td className="numeric">{part.quantity}</td>
-											<td>
-												{part.sources.length
-													? part.sources
-															.map((source) => describeSource(source))
-															.join(", ")
-													: "Unavailable"}
-											</td>
-											<td className="numeric">
-												{part.sources.length
-													? part.sources
-															.map((source) => {
-																const chance = getDropChance(source, "Intact");
-																return chance === undefined
-																	? "Unavailable"
-																	: `${chance}%`;
-															})
-															.join(", ")
-													: "Unavailable"}
-											</td>
-										</tr>
-									))}
+									{item.components.map((part) => {
+										const sources = prioritizeSources(
+											part.sources,
+											"Intact",
+										).slice(0, 3);
+										return (
+											<tr key={part.name}>
+												<th scope="row">{part.name}</th>
+												<td className="numeric">{part.quantity}</td>
+												<td>
+													{sources.length
+														? sources.map(describeSource).join(", ")
+														: "Unavailable"}
+												</td>
+												<td className="numeric">
+													{sources.length
+														? sources
+																.map((source) => {
+																	const chance = getDropChance(
+																		source,
+																		"Intact",
+																	);
+																	return chance === undefined
+																		? "Unavailable"
+																		: `${chance}%`;
+																})
+																.join(", ")
+														: "Unavailable"}
+												</td>
+											</tr>
+										);
+									})}
 								</tbody>
 							</table>
 						</RetroPanel>
 						<p className="data-note">
-							Relic chances are per Intact relic opened. Sample sources are
-							incomplete and can include vaulted relics.
+							Up to three relics per component. Chances are per Intact relic
+							opened.
 						</p>
 					</section>
 					<section>
-						<h2 className="section-caption">Market prices</h2>
+						<h2 className="section-caption">Market set price</h2>
 						<RetroPanel className="text-panel">
 							{item.market ? (
 								<>
 									<strong>{item.market.platinum} Platinum</strong>
 									<p>
-										{item.market.platform} ·{" "}
+										Lowest listed sell order · {item.market.platform} ·{" "}
 										<time dateTime={item.market.observedAt}>
-											{item.market.observedAt}
+											{item.market.observedAt.slice(0, 16).replace("T", " ")}{" "}
+											UTC
 										</time>
 									</p>
 								</>
 							) : (
 								<>
 									<strong>Price unavailable</strong>
-									<p>Live Warframe.market data is pending.</p>
+									<p>No current PC set quote from Warframe.market.</p>
 								</>
 							)}
 						</RetroPanel>

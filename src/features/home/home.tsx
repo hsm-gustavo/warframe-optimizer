@@ -137,12 +137,12 @@ export function Home() {
 							<div>
 								<span className="lamp lamp-amber" />
 								<span>Live drop tables</span>
-								<strong>Pending</strong>
+								<strong>WFCD</strong>
 							</div>
 							<div>
 								<span className="lamp lamp-amber" />
 								<span>Market prices</span>
-								<strong>Pending</strong>
+								<strong>PC quotes</strong>
 							</div>
 						</RetroPanel>
 						<p className="utility-note">
@@ -160,7 +160,7 @@ export function Home() {
 								changes the chance of a common reward.
 							</p>
 							<Link to="/optimizer" search={{ item: "burston-prime" }}>
-								Open sample comparison{" "}
+								Open Burston comparison{" "}
 								<ArrowRight size={13} aria-hidden="true" />
 							</Link>
 						</div>

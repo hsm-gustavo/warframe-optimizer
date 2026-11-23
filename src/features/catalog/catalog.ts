@@ -22,3 +22,17 @@ export function describeSource(source: DropSource) {
 				.filter(Boolean)
 				.join(" · ");
 }
+
+export function prioritizeSources(
+	sources: readonly DropSource[],
+	refinement: Refinement,
+) {
+	return [...sources].sort((a, b) => {
+		const reported = (source: DropSource) =>
+			source.kind === "relic" && !!source.relic.missionDrop;
+		return (
+			Number(reported(b)) - Number(reported(a)) ||
+			(getDropChance(b, refinement) ?? 0) - (getDropChance(a, refinement) ?? 0)
+		);
+	});
+}

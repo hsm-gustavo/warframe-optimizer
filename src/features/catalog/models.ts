@@ -20,13 +20,14 @@ export type DropRarity = "Common" | "Uncommon" | "Rare";
 
 export interface Relic {
 	name: string;
+	missionDrop?: { location: string; rotation?: string; probability: number };
 }
 
 export type DropSource =
 	| {
 			kind: "relic";
 			relic: Relic;
-			rarity: DropRarity;
+			rarity?: DropRarity;
 			probabilities?: Partial<Record<Refinement, number>>;
 	  }
 	| {
@@ -56,4 +57,5 @@ export interface CatalogItem {
 	artwork: ItemArtwork;
 	components: readonly Component[];
 	market?: MarketQuote;
+	dropData?: "wfcd";
 }

@@ -2,9 +2,9 @@
 
 A KIM-inspired Warframe farming workspace built with TanStack Start. The desktop, catalog, item records, and optimizer are public. Personal Files uses PostgreSQL-backed Better Auth sessions for Inventory, Wishlist, and Farming History.
 
-The shared desktop controls live in `src/components/retro`. The public routes use server-rendered TanStack loaders and a typed catalog in `src/features/catalog`. The catalog uses eight local equipment fixtures with selected relic drops and published [refinement odds](https://wiki.warframe.com/w/Void_Relic). Sample relics can be vaulted. The optimizer estimates openings per drop from a single relic roll.
+The shared desktop controls live in `src/components/retro`. The public routes use server-rendered TanStack loaders and a typed catalog in `src/features/catalog`. The catalog starts with eight local equipment records. Item details and the optimizer enrich those records with [WFCD relic and mission rewards](https://github.com/WFCD/warframe-drop-data), with labeled sample drops if the feed is unavailable. The optimizer estimates openings from a single relic roll.
 
-The live [WFCD drop table import](https://github.com/WFCD/warframe-drop-data) and [Warframe.market integration](https://docs.warframe.market/) are pending. The market adapter belongs on the server, with a short-lived cache, in-flight request deduplication, and rate limiting before components receive quotes.
+The server reads public [Warframe.market v2 orders](https://docs.warframe.market/docs/api/orders/) for PC. It caches quotes for two minutes, deduplicates concurrent requests, and spaces request starts at least 400 milliseconds apart per server process. Component quotes load on demand. The farm-versus-buy estimate needs a set quote, reported relic mission sources for every component, and the player’s Platinum value per opening. It assumes the selected relics are in hand and excludes squad rewards and relic collection time.
 
 # Getting Started
 
