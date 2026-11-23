@@ -71,6 +71,10 @@ pnpm dlx shadcn@latest add button
 ```
 
 
+## Local database
+
+Set `POSTGRES_PASSWORD` in the ignored `.env` file, then run `docker compose up -d postgres`. PostgreSQL binds only to localhost and stores data in the Compose volume. Use the same password in `DATABASE_URL` in `.env.local`.
+
 ## Local accounts
 
 Set `DATABASE_URL` and `BETTER_AUTH_URL` in `.env.local` to point to the local PostgreSQL service and the app. Generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32`. Run the migrations, then bootstrap and verify the test administrator.
