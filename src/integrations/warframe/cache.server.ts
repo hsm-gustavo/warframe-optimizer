@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { setTimeout } from "node:timers/promises";
 import { Redis } from "ioredis";
 
 type CacheEntry<Value> = {
@@ -66,48 +68,104 @@ async function writeShared<Value>(key: string, entry: CacheEntry<Value>) {
 	}
 }
 
-export function createTimedLookup<Key extends string | undefined, Value>(
+export { getRedis };
+
+export function createSnapshot<Value>(
 	namespace: string,
-	load: (key: Key) => Promise<Value>,
+	load: () => Promise<Value>,
 	freshFor: number,
-	retryAfter: number,
+	retainFor: number,
+	sharedRefresh = false,
 ) {
-	const cached = new Map<Key, CacheEntry<Value>>();
-	const pending = new Map<Key, Promise<Value | null>>();
-
-	async function lookup(key: Key): Promise<Value | null> {
-		const sharedKey = `orbital-field-desk:v1:${namespace}:${key ?? "feed"}`;
-		const shared = await readShared<Value>(sharedKey);
-		if (shared) {
-			cached.set(key, shared);
-			return shared.value;
-		}
-
-		let entry: CacheEntry<Value>;
+	const key = `orbital-field-desk:v2:snapshot:${namespace}`;
+	let saved: CacheEntry<{ data: Value; observedAt: string }> | undefined;
+	let pending: Promise<typeof saved> | undefined;
+	let retryAt = 0;
+	const fresh = () =>
+		saved?.value && Date.now() - Date.parse(saved.value.observedAt) < freshFor;
+	async function read() {
+		if (saved?.expiresAt && saved.expiresAt <= Date.now()) saved = undefined;
+		if (fresh()) return saved;
+		const remote = await readShared<{ data: Value; observedAt: string }>(key);
+		if (
+			remote?.value &&
+			(!saved?.value || remote.value.observedAt > saved.value.observedAt)
+		)
+			saved = remote;
+		if (saved && saved.expiresAt <= Date.now()) saved = undefined;
+		if (
+			Date.now() < retryAt ||
+			(saved?.value &&
+				Date.now() - Date.parse(saved.value.observedAt) < freshFor)
+		)
+			return saved;
+		const client = sharedRefresh ? await getRedis() : undefined;
+		const lock = `${key}:lock`;
+		const token = randomUUID();
+		let held = false;
 		try {
-			const value = (await load(key)) ?? null;
-			entry = { value, expiresAt: Date.now() + freshFor };
+			if (client) {
+				held = (await client.set(lock, token, "PX", 7000, "NX")) === "OK";
+				if (!held) {
+					if (saved) return saved;
+					for (let retry = 0; retry < 8; retry++) {
+						await setTimeout(175);
+						const result = await readShared<{
+							data: Value;
+							observedAt: string;
+						}>(key);
+						if (result) {
+							saved = result;
+							return saved;
+						}
+					}
+					return undefined;
+				}
+				const recent = await readShared<{ data: Value; observedAt: string }>(
+					key,
+				);
+				if (
+					recent?.value &&
+					Date.now() - Date.parse(recent.value.observedAt) < freshFor
+				) {
+					saved = recent;
+					return saved;
+				}
+			}
+			saved = {
+				value: { data: await load(), observedAt: new Date().toISOString() },
+				expiresAt: Date.now() + retainFor,
+			};
+			await writeShared(key, saved);
 		} catch {
-			entry = { value: null, expiresAt: Date.now() + retryAfter };
-			cached.set(key, entry);
-			return entry.value;
+			retryAt = Date.now() + 60_000;
+		} finally {
+			if (client && held) await releaseLease(client, lock, token);
 		}
-
-		cached.set(key, entry);
-		await writeShared(sharedKey, entry);
-		return entry.value;
+		return saved;
 	}
-
-	return (key: Key): Promise<Value | null> => {
-		const entry = cached.get(key);
-		if (entry && entry.expiresAt > Date.now())
-			return Promise.resolve(entry.value);
-
-		const request = pending.get(key);
-		if (request) return request;
-
-		const next = lookup(key).finally(() => pending.delete(key));
-		pending.set(key, next);
-		return next;
+	return async () => {
+		if (!pending)
+			pending = read().finally(() => {
+				pending = undefined;
+			});
+		const entry = (await pending)?.value;
+		return entry
+			? {
+					...entry,
+					stale: Date.now() - Date.parse(entry.observedAt) >= freshFor,
+				}
+			: null;
 	};
+}
+
+export async function releaseLease(client: Redis, key: string, token: string) {
+	await client
+		.eval(
+			"if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end return 0",
+			1,
+			key,
+			token,
+		)
+		.catch(() => {});
 }

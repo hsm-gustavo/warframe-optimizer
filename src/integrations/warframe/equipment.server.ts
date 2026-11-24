@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { fixtureItems } from "#/features/catalog/fixtures";
 import type { CatalogItem, Category } from "#/features/catalog/models";
-import { createTimedLookup } from "./cache.server";
+import { createSnapshot } from "./cache.server";
 
 const feeds = {
 	Warframes: { category: "Warframe", artwork: "frame" },
@@ -19,6 +19,7 @@ const feeds = {
 const equipment = z.array(
 	z.object({
 		name: z.string(),
+		uniqueName: z.string().optional(),
 		isPrime: z.boolean().optional(),
 		components: z
 			.array(
@@ -31,7 +32,12 @@ const equipment = z.array(
 	}),
 );
 const components = z.array(
-	z.object({ uniqueName: z.string(), name: z.string() }),
+	z.object({
+		uniqueName: z.string(),
+		name: z.string(),
+		tradable: z.boolean().optional(),
+		ducats: z.number().nonnegative().optional(),
+	}),
 );
 
 async function fetchEquipment<T>(file: string, schema: z.ZodType<T>) {
@@ -42,7 +48,7 @@ async function fetchEquipment<T>(file: string, schema: z.ZodType<T>) {
 	return schema.parse(await response.json());
 }
 
-const getEquipment = createTimedLookup(
+const getEquipment = createSnapshot(
 	"wfcd:prime-equipment",
 	async () => {
 		const [parts, groups] = await Promise.all([
@@ -54,9 +60,7 @@ const getEquipment = createTimedLookup(
 				})),
 			),
 		]);
-		const partNames = new Map(
-			parts.map((part) => [part.uniqueName, part.name]),
-		);
+		const partNames = new Map(parts.map((part) => [part.uniqueName, part]));
 		const records = new Map<string, CatalogItem>();
 		for (const { meta, items } of groups) {
 			for (const item of items) {
@@ -70,16 +74,23 @@ const getEquipment = createTimedLookup(
 					.replace(/^-|-$/g, "");
 				const counts = new Map<string, number>();
 				for (const ref of item.components ?? []) {
-					const name = partNames.get(ref.uniqueName);
-					if (name) counts.set(name, (counts.get(name) ?? 0) + ref.itemCount);
+					if (partNames.has(ref.uniqueName))
+						counts.set(
+							ref.uniqueName,
+							(counts.get(ref.uniqueName) ?? 0) + ref.itemCount,
+						);
 				}
 				records.set(slug, {
 					...meta,
 					slug,
 					name: item.name,
+					sourceId: item.uniqueName,
 					edition: "Prime",
-					components: Array.from(counts, ([name, quantity]) => ({
-						name,
+					components: Array.from(counts, ([id, quantity]) => ({
+						id,
+						name: partNames.get(id)?.name ?? id,
+						tradable: partNames.get(id)?.tradable,
+						ducats: partNames.get(id)?.ducats,
 						quantity,
 						sources: [],
 					})),
@@ -93,15 +104,26 @@ const getEquipment = createTimedLookup(
 		);
 	},
 	3_600_000,
-	60_000,
+	30 * 86_400_000,
 );
 
 export async function getCatalog(): Promise<{
-	source: "wfcd" | "sample";
+	source: "wfcd" | "stale" | "sample" | "unavailable";
 	items: readonly CatalogItem[];
+	observedAt?: string;
 }> {
-	const items = await getEquipment(undefined);
-	return items
-		? { source: "wfcd", items }
-		: { source: "sample", items: fixtureItems };
+	const snapshot = await getEquipment();
+	if (snapshot)
+		return {
+			source: snapshot.stale ? "stale" : "wfcd",
+			items: snapshot.data,
+			observedAt: snapshot.observedAt,
+		};
+	if (
+		process.env.NODE_ENV !== "production" &&
+		process.env.WARFRAME_FIXTURES === "1"
+	) {
+		return { source: "sample", items: fixtureItems };
+	}
+	return { source: "unavailable", items: [] };
 }

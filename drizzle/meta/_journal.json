@@ -8,6 +8,27 @@
       "when": 1795442996477,
       "tag": "0000_fat_gamma_corps",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795521245899,
+      "tag": "0001_huge_gamora",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795521717370,
+      "tag": "0002_sticky_doctor_octopus",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795521823539,
+      "tag": "0003_clever_robbie_robertson",
+      "breakpoints": true
     }
   ]
 }

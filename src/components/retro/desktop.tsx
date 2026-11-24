@@ -3,12 +3,14 @@ import {
 	Archive,
 	ChartNoAxesCombined,
 	FolderOpen,
+	Gem,
 	Monitor,
 } from "lucide-react";
 
 const programs = [
 	{ to: "/", label: "Desktop", icon: Monitor, color: "mint" },
 	{ to: "/items", label: "Item Catalog", icon: FolderOpen, color: "gold" },
+	{ to: "/relics", label: "Relics", icon: Gem, color: "gold" },
 	{
 		to: "/optimizer",
 		label: "Optimizer",

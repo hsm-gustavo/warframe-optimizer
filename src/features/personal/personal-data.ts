@@ -1,94 +1,281 @@
 import { createServerFn } from "@tanstack/react-start";
-import {
-	getRequestHeaders,
-	setResponseHeader,
-} from "@tanstack/react-start/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { componentId, refinements } from "#/features/catalog/models";
+import {
+	getRelicIndex,
+	withLiveDrops,
+} from "#/integrations/warframe/drops.server";
 import { getCatalog } from "#/integrations/warframe/equipment.server";
+import {
+	equipmentRecordKey,
+	getOwnedRecords,
+	personalSession,
+	requirePersonalWrite,
+	saveGoal,
+} from "./inventory.server";
 
-export const personalViewIds = ["inventory", "wishlist", "history"] as const;
-export type PersonalView = (typeof personalViewIds)[number];
-
-async function getPersonalSession() {
-	setResponseHeader("Cache-Control", "private, no-store");
-	const { auth } = await import("#/lib/auth");
-	return auth.api.getSession({ headers: getRequestHeaders() });
-}
+export const personalViews = ["equipment", "parts", "relics", "goals"] as const;
+export type PersonalView = (typeof personalViews)[number];
+const id = z.string().min(1).max(512);
+const quantity = z.number().int().min(0).max(9999);
 
 export const loadPersonalFiles = createServerFn().handler(async () => {
-	const session = await getPersonalSession();
+	const session = await personalSession();
 	if (!session) return null;
-
-	const { db } = await import("#/db/index");
-	const { personalEntry } = await import("#/db/schema");
-	const catalog = getCatalog();
-	const entries = await db
-		.select({
-			view: personalEntry.view,
-			itemSlug: personalEntry.itemSlug,
-			quantity: personalEntry.quantity,
-			updatedAt: personalEntry.updatedAt,
-		})
-		.from(personalEntry)
-		.where(eq(personalEntry.userId, session.user.id))
-		.orderBy(personalEntry.itemSlug);
-
+	const [owned, catalog, relicIndex] = await Promise.all([
+		getOwnedRecords(session.user.id),
+		getCatalog(),
+		getRelicIndex(),
+	]);
+	const slugs = new Map(
+		catalog.items.flatMap((item) =>
+			item.sourceId ? [[item.sourceId, item.slug]] : [],
+		),
+	);
+	const toSlug = (id: string) => slugs.get(id) ?? id;
+	const goals = owned.goals.map((goal) => ({
+		...goal,
+		equipmentId: toSlug(goal.equipmentId),
+	}));
+	const equipment = owned.equipment.map((record) => ({
+		...record,
+		equipmentId: toSlug(record.equipmentId),
+	}));
+	const goalIds = new Set(goals.map((goal) => goal.equipmentId));
+	const goalItems = await Promise.all(
+		catalog.items.filter((item) => goalIds.has(item.slug)).map(withLiveDrops),
+	);
+	const ownedRelicIds = new Set(owned.relics.map((record) => record.relicId));
+	const goalSources = goalItems.map((item) => ({
+		slug: item.slug,
+		relics: Array.from(
+			new Map(
+				item.components
+					.filter(
+						(part) =>
+							(owned.parts.find(
+								(entry) => entry.componentId === componentId(item.slug, part),
+							)?.quantity ?? 0) < part.quantity,
+					)
+					.flatMap((part) =>
+						part.sources.flatMap((source) =>
+							source.kind === "relic" &&
+							source.relic.id &&
+							ownedRelicIds.has(source.relic.id)
+								? ([
+										[
+											source.relic.id,
+											{ id: source.relic.id, name: source.relic.name },
+										],
+									] as const)
+								: [],
+						),
+					),
+			).values(),
+		),
+	}));
 	return {
-		user: { name: session.user.name, role: session.user.role },
-		items: (await catalog).items.map(({ slug, name }) => ({ slug, name })),
-		entries,
+		user: { name: session.user.name },
+		...owned,
+		goals,
+		equipment,
+		items: catalog.items.map((item) => ({
+			slug: item.slug,
+			name: item.name,
+			parts: item.components.map((part) => ({
+				id: componentId(item.slug, part),
+				name: part.name,
+				quantity: part.quantity,
+			})),
+		})),
+		relicIndex: relicIndex.records.map(({ id, name, era }) => ({
+			id,
+			name,
+			era,
+		})),
+		goalSources,
 	};
 });
 
-export const savePersonalEntry = createServerFn({ method: "POST" })
+export const saveInventory = createServerFn({ method: "POST" })
 	.validator(
-		z.object({
-			view: z.enum(["inventory", "wishlist", "history"]),
-			itemSlug: z.string().min(1).max(128),
-			quantity: z.number().int().min(0).max(9999),
-		}),
+		z.discriminatedUnion("kind", [
+			z.object({ kind: z.literal("equipment"), id, quantity }),
+			z.object({ kind: z.literal("part"), id, quantity }),
+			z.object({
+				kind: z.literal("relic"),
+				id,
+				quantity,
+				refinement: z.enum(refinements),
+			}),
+		]),
 	)
 	.handler(async ({ data }) => {
-		const appUrl = process.env.BETTER_AUTH_URL;
-		if (
-			!appUrl ||
-			getRequestHeaders().get("origin") !== new URL(appUrl).origin
-		) {
-			throw new Error("Invalid request origin.");
-		}
-		const session = await getPersonalSession();
-		if (!session) throw new Error("Sign in to update Personal Files.");
-
+		const userId = await requirePersonalWrite();
 		const { db } = await import("#/db/index");
-		const { personalEntry } = await import("#/db/schema");
-		const userId = session.user.id;
-
-		if (data.quantity === 0) {
+		const { equipmentOwnership, componentInventory, relicInventory } =
+			await import("#/db/schema");
+		if (data.kind === "relic") {
+			const { refinement } = data;
+			if (!data.quantity) {
+				await db
+					.delete(relicInventory)
+					.where(
+						and(
+							eq(relicInventory.userId, userId),
+							eq(relicInventory.relicId, data.id),
+							eq(relicInventory.refinement, refinement),
+						),
+					);
+			} else {
+				const { records } = await getRelicIndex();
+				if (
+					!records.some(
+						(record) =>
+							record.id === data.id &&
+							record.rewards.some(
+								(reward) => reward.probabilities[refinement] !== undefined,
+							),
+					)
+				)
+					throw new Error("Relic refinement unavailable.");
+				await db
+					.insert(relicInventory)
+					.values({
+						userId,
+						relicId: data.id,
+						refinement,
+						quantity: data.quantity,
+					})
+					.onConflictDoUpdate({
+						target: [
+							relicInventory.userId,
+							relicInventory.relicId,
+							relicInventory.refinement,
+						],
+						set: { quantity: data.quantity },
+					});
+			}
+			return;
+		}
+		const { items } =
+			data.quantity || data.kind === "equipment"
+				? await getCatalog()
+				: { items: [] };
+		if (data.kind === "equipment") {
+			const item = items.find((item) => item.slug === data.id);
+			const storedId = await equipmentRecordKey(
+				userId,
+				data.id,
+				item?.sourceId ?? data.id,
+				"equipment",
+			);
+			if (!data.quantity)
+				await db
+					.delete(equipmentOwnership)
+					.where(
+						and(
+							eq(equipmentOwnership.userId, userId),
+							eq(equipmentOwnership.equipmentId, storedId),
+						),
+					);
+			else {
+				if (!item) throw new Error("Equipment unavailable.");
+				await db
+					.insert(equipmentOwnership)
+					.values({ userId, equipmentId: storedId, quantity: data.quantity })
+					.onConflictDoUpdate({
+						target: [equipmentOwnership.userId, equipmentOwnership.equipmentId],
+						set: { quantity: data.quantity },
+					});
+			}
+		} else if (!data.quantity)
 			await db
-				.delete(personalEntry)
+				.delete(componentInventory)
 				.where(
 					and(
-						eq(personalEntry.userId, userId),
-						eq(personalEntry.view, data.view),
-						eq(personalEntry.itemSlug, data.itemSlug),
+						eq(componentInventory.userId, userId),
+						eq(componentInventory.componentId, data.id),
 					),
 				);
-		} else {
-			const { items } = await getCatalog();
-			if (!items.some((item) => item.slug === data.itemSlug))
-				throw new Error("Unknown equipment.");
-			const quantity = data.view === "inventory" ? data.quantity : 1;
+		else {
+			if (
+				!items.some((item) =>
+					item.components.some(
+						(part) => componentId(item.slug, part) === data.id,
+					),
+				)
+			)
+				throw new Error("Component unavailable.");
 			await db
-				.insert(personalEntry)
-				.values({ ...data, userId, quantity })
+				.insert(componentInventory)
+				.values({ userId, componentId: data.id, quantity: data.quantity })
 				.onConflictDoUpdate({
-					target: [
-						personalEntry.userId,
-						personalEntry.view,
-						personalEntry.itemSlug,
-					],
-					set: { quantity, updatedAt: new Date().toISOString() },
+					target: [componentInventory.userId, componentInventory.componentId],
+					set: { quantity: data.quantity },
 				});
 		}
 	});
+
+export const updateGoal = createServerFn({ method: "POST" })
+	.validator(
+		z.object({
+			id,
+			priority: z.number().int().min(1).max(3).optional(),
+			operation: z.enum(["save", "remove", "complete"]),
+		}),
+	)
+	.handler(async ({ data }) => {
+		const userId = await requirePersonalWrite();
+		const { items } = await getCatalog();
+		const item = items.find((entry) => entry.slug === data.id);
+		if (data.operation === "save" && !item)
+			throw new Error("Equipment unavailable.");
+		const sourceId = item?.sourceId ?? data.id;
+		const goalId = await equipmentRecordKey(userId, data.id, sourceId, "goal");
+		const ownedId =
+			data.operation === "complete"
+				? await equipmentRecordKey(userId, data.id, sourceId, "equipment")
+				: undefined;
+		await saveGoal(userId, goalId, data.priority, data.operation, ownedId);
+	});
+
+export const loadPlannerStock = createServerFn().handler(async () => {
+	const session = await personalSession();
+	if (!session) return null;
+	const { parts, relics } = await getOwnedRecords(session.user.id);
+	return { parts, relics };
+});
+
+export const loadDesktopGoals = createServerFn().handler(async () => {
+	const session = await personalSession();
+	if (!session) return [];
+	const [{ goals, parts }, { items }] = await Promise.all([
+		getOwnedRecords(session.user.id),
+		getCatalog(),
+	]);
+	const { completion, remainingParts } = await import(
+		"#/features/optimizer/planning"
+	);
+	const inventory = new Map(
+		parts.map((part) => [part.componentId, part.quantity]),
+	);
+	return goals
+		.filter((goal) => !goal.completedAt)
+		.slice(0, 5)
+		.map((goal) => {
+			const item = items.find(
+				(entry) =>
+					entry.slug === goal.equipmentId ||
+					entry.sourceId === goal.equipmentId,
+			);
+			return {
+				slug: item?.slug ?? goal.equipmentId,
+				name: item?.name ?? goal.equipmentId,
+				progress: item
+					? completion(remainingParts(item, inventory))
+					: undefined,
+			};
+		});
+});

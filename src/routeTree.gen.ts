@@ -14,6 +14,8 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as OptimizerRouteImport } from './routes/optimizer'
 import { Route as ItemsIndexRouteImport } from './routes/items/index'
 import { Route as ItemsSlugRouteImport } from './routes/items/$slug'
+import { Route as RelicsIndexRouteImport } from './routes/relics/index'
+import { Route as RelicsSlugRouteImport } from './routes/relics/$slug'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -41,6 +43,16 @@ const ItemsSlugRoute = ItemsSlugRouteImport.update({
   path: '/items/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RelicsIndexRoute = RelicsIndexRouteImport.update({
+  id: '/relics/',
+  path: '/relics/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RelicsSlugRoute = RelicsSlugRouteImport.update({
+  id: '/relics/$slug',
+  path: '/relics/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -52,7 +64,9 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRoute
   '/optimizer': typeof OptimizerRoute
   '/items/$slug': typeof ItemsSlugRoute
+  '/relics/$slug': typeof RelicsSlugRoute
   '/items/': typeof ItemsIndexRoute
+  '/relics/': typeof RelicsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
@@ -60,7 +74,9 @@ export interface FileRoutesByTo {
   '/app': typeof AppRoute
   '/optimizer': typeof OptimizerRoute
   '/items/$slug': typeof ItemsSlugRoute
+  '/relics/$slug': typeof RelicsSlugRoute
   '/items': typeof ItemsIndexRoute
+  '/relics': typeof RelicsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
@@ -69,22 +85,41 @@ export interface FileRoutesById {
   '/app': typeof AppRoute
   '/optimizer': typeof OptimizerRoute
   '/items/$slug': typeof ItemsSlugRoute
+  '/relics/$slug': typeof RelicsSlugRoute
   '/items/': typeof ItemsIndexRoute
+  '/relics/': typeof RelicsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/app' | '/optimizer' | '/items/$slug' | '/items/' | '/api/auth/$'
+    | '/'
+    | '/app'
+    | '/optimizer'
+    | '/items/$slug'
+    | '/relics/$slug'
+    | '/items/'
+    | '/relics/'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app' | '/optimizer' | '/items/$slug' | '/items' | '/api/auth/$'
+  to:
+    | '/'
+    | '/app'
+    | '/optimizer'
+    | '/items/$slug'
+    | '/relics/$slug'
+    | '/items'
+    | '/relics'
+    | '/api/auth/$'
   id:
     | '__root__'
     | '/'
     | '/app'
     | '/optimizer'
     | '/items/$slug'
+    | '/relics/$slug'
     | '/items/'
+    | '/relics/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
@@ -93,7 +128,9 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRoute
   OptimizerRoute: typeof OptimizerRoute
   ItemsSlugRoute: typeof ItemsSlugRoute
+  RelicsSlugRoute: typeof RelicsSlugRoute
   ItemsIndexRoute: typeof ItemsIndexRoute
+  RelicsIndexRoute: typeof RelicsIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -134,6 +171,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ItemsSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/relics/': {
+      id: '/relics/'
+      path: '/relics'
+      fullPath: '/relics/'
+      preLoaderRoute: typeof RelicsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/relics/$slug': {
+      id: '/relics/$slug'
+      path: '/relics/$slug'
+      fullPath: '/relics/$slug'
+      preLoaderRoute: typeof RelicsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -149,7 +200,9 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRoute,
   OptimizerRoute: OptimizerRoute,
   ItemsSlugRoute: ItemsSlugRoute,
+  RelicsSlugRoute: RelicsSlugRoute,
   ItemsIndexRoute: ItemsIndexRoute,
+  RelicsIndexRoute: RelicsIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

@@ -1,20 +1,16 @@
+import { sql } from "drizzle-orm";
 import {
+	bigint,
 	boolean,
+	check,
 	index,
 	integer,
 	pgTable,
 	primaryKey,
-	serial,
 	text,
 	timestamp,
 	uniqueIndex,
 } from "drizzle-orm/pg-core";
-
-export const todos = pgTable("todos", {
-	id: serial().primaryKey(),
-	title: text().notNull(),
-	createdAt: timestamp("created_at").defaultNow(),
-});
 
 export const user = pgTable("user", {
 	id: text().primaryKey(),
@@ -86,18 +82,75 @@ export const verification = pgTable(
 	(table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
-export const personalEntry = pgTable(
-	"personal_entry",
+const owner = () =>
+	text("userId")
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" });
+const quantity = () => integer().notNull();
+
+export const equipmentOwnership = pgTable(
+	"equipment_ownership",
 	{
-		userId: text()
-			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
-		view: text({ enum: ["inventory", "wishlist", "history"] }).notNull(),
-		itemSlug: text().notNull(),
-		quantity: integer().notNull().default(1),
-		updatedAt: timestamp({ mode: "string" }).notNull().defaultNow(),
+		userId: owner(),
+		equipmentId: text().notNull(),
+		quantity: quantity(),
 	},
-	(table) => [
-		primaryKey({ columns: [table.userId, table.view, table.itemSlug] }),
+	(t) => [
+		primaryKey({ columns: [t.userId, t.equipmentId] }),
+		check("equipment_quantity_check", sql`${t.quantity} > 0`),
 	],
 );
+
+export const componentInventory = pgTable(
+	"component_inventory",
+	{
+		userId: owner(),
+		componentId: text().notNull(),
+		quantity: quantity(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.userId, t.componentId] }),
+		check("component_quantity_check", sql`${t.quantity} > 0`),
+	],
+);
+
+export const relicInventory = pgTable(
+	"relic_inventory",
+	{
+		userId: owner(),
+		relicId: text().notNull(),
+		refinement: text({
+			enum: ["Intact", "Exceptional", "Flawless", "Radiant"],
+		}).notNull(),
+		quantity: quantity(),
+	},
+	(t) => [
+		primaryKey({ columns: [t.userId, t.relicId, t.refinement] }),
+		check("relic_quantity_check", sql`${t.quantity} > 0`),
+		check(
+			"relic_refinement_check",
+			sql`${t.refinement} in ('Intact', 'Exceptional', 'Flawless', 'Radiant')`,
+		),
+	],
+);
+
+export const farmingGoal = pgTable(
+	"farming_goal",
+	{
+		userId: owner(),
+		equipmentId: text().notNull(),
+		priority: integer().notNull().default(2),
+		completedAt: timestamp({ mode: "string" }),
+	},
+	(t) => [
+		primaryKey({ columns: [t.userId, t.equipmentId] }),
+		check("goal_priority_check", sql`${t.priority} between 1 and 3`),
+	],
+);
+
+export const rateLimit = pgTable("rate_limit", {
+	id: text().primaryKey(),
+	key: text().notNull().unique(),
+	count: integer().notNull(),
+	lastRequest: bigint({ mode: "number" }).notNull(),
+});

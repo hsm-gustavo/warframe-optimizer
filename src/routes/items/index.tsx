@@ -23,7 +23,7 @@ export const Route = createFileRoute("/items/")({
 });
 
 function CatalogPage() {
-	const { items, source } = Route.useLoaderData();
+	const { items, source, observedAt } = Route.useLoaderData();
 	const { q, category, page } = Route.useSearch();
 	const navigate = Route.useNavigate();
 
@@ -31,6 +31,7 @@ function CatalogPage() {
 		<ItemCatalog
 			items={items}
 			source={source}
+			observedAt={observedAt}
 			page={page ?? 1}
 			onPageChange={(value) =>
 				void navigate({

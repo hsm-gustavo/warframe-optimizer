@@ -20,7 +20,7 @@ export function prioritizeSources(
 ) {
 	return [...sources].sort((a, b) => {
 		const reported = (source: DropSource) =>
-			source.kind === "relic" && !!source.relic.missionDrop;
+			source.kind === "relic" && Boolean(source.relic.missions?.length);
 		return (
 			Number(reported(b)) - Number(reported(a)) ||
 			(getDropChance(b, refinement) ?? 0) - (getDropChance(a, refinement) ?? 0)
@@ -29,7 +29,10 @@ export function prioritizeSources(
 }
 
 export function dropDataLabel(item: CatalogItem) {
-	if (item.dropData) return "WFCD drop tables";
+	if (item.dropData)
+		return item.dropData === "stale"
+			? "Last known WFCD drops"
+			: "WFCD drop tables";
 	return item.components.some((part) => part.sources.length)
 		? "Sample drops"
 		: "Drop data unavailable";

@@ -16,6 +16,7 @@ export type CatalogCategory = Category | "All";
 export function ItemCatalog({
 	items,
 	source,
+	observedAt,
 	page,
 	onPageChange,
 	query,
@@ -24,7 +25,8 @@ export function ItemCatalog({
 	onCategoryChange,
 }: {
 	items: readonly Omit<CatalogItem, "components">[];
-	source: "wfcd" | "sample";
+	source: "wfcd" | "stale" | "sample" | "unavailable";
+	observedAt?: string;
 	page: number;
 	onPageChange: (page: number) => void;
 	query: string;
@@ -48,14 +50,19 @@ export function ItemCatalog({
 		currentPage * pageSize,
 	);
 
+	const status = {
+		wfcd: "WFCD equipment catalog",
+		stale: "Last known WFCD catalog",
+		sample: "Development fixtures",
+		unavailable: "Catalog unavailable",
+	}[source];
+
 	return (
 		<Window
 			title="Item Catalog — Equipment Index"
 			icon={FolderOpen}
 			status={
-				<StatusBar
-					end={source === "wfcd" ? "WFCD equipment catalog" : "Sample catalog"}
-				>
+				<StatusBar end={status}>
 					<span aria-live="polite">
 						{results.length} of {items.length} items
 					</span>
@@ -66,10 +73,19 @@ export function ItemCatalog({
 				<div className="page-heading">
 					<h1>Item Catalog</h1>
 					<p>
-						{source === "wfcd"
-							? "Browse Prime equipment and open a file to inspect its components."
-							: "WFCD equipment is unavailable. Showing the local sample catalog."}
+						{source === "unavailable"
+							? "Equipment data is temporarily unavailable. Try again later."
+							: "Browse Prime equipment and open a file to inspect its components."}
 					</p>
+					{observedAt && (
+						<p className="data-note">
+							Last synchronized{" "}
+							<time dateTime={observedAt}>
+								{observedAt.slice(0, 16).replace("T", " ")} UTC
+							</time>
+							.
+						</p>
+					)}
 				</div>
 				<div className="catalog-toolbar">
 					<div className="form-field catalog-search">
@@ -152,8 +168,16 @@ export function ItemCatalog({
 						) : (
 							<div className="empty-state">
 								<Search size={28} aria-hidden="true" />
-								<h2>No matching equipment</h2>
-								<p>Try another name or select a different category.</p>
+								<h2>
+									{source === "unavailable"
+										? "Catalog unavailable"
+										: "No matching equipment"}
+								</h2>
+								<p>
+									{source === "unavailable"
+										? "Try again when the equipment feed is available."
+										: "Try another name or select a different category."}
+								</p>
 							</div>
 						)}
 						{pageCount > 1 && (

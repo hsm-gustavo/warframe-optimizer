@@ -4,19 +4,28 @@ import { ItemDetails, MissingItem } from "#/features/catalog/item-details";
 
 export const Route = createFileRoute("/items/$slug")({
 	loader: async ({ params }) => {
-		const item = await loadEquipmentRecord({ data: params.slug });
-		if (!item) throw notFound();
-		return item;
+		const data = await loadEquipmentRecord({ data: params.slug });
+		if (!data.item && data.source !== "unavailable") throw notFound();
+		return data;
 	},
 	component: Details,
 	notFoundComponent: MissingItem,
 	head: ({ loaderData }) => ({
 		meta: [
-			{ title: `${loaderData?.name ?? "Equipment File"} | Orbital Field Desk` },
+			{
+				title: `${loaderData?.item?.name ?? "Equipment File"} | Orbital Field Desk`,
+			},
 		],
 	}),
 });
 
 function Details() {
-	return <ItemDetails item={Route.useLoaderData()} />;
+	const { item } = Route.useLoaderData();
+	return item ? (
+		<ItemDetails item={item} />
+	) : (
+		<p className="workspace-message">
+			Equipment catalog unavailable. Try again later.
+		</p>
+	);
 }

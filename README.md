@@ -1,241 +1,68 @@
 # Orbital Field Desk
 
-A KIM-inspired Warframe farming workspace built with TanStack Start. The desktop, catalog, item records, and optimizer are public. Personal Files uses PostgreSQL-backed Better Auth sessions for Inventory, Wishlist, and Farming History.
+A KIM-inspired Warframe farming workspace. Browse Prime equipment and relics, compare refinement and squad odds, and sign in to build a plan from your parts, relic inventory, and farming goals.
 
-The shared desktop controls live in `src/components/retro`. The public routes use server-rendered TanStack loaders and a typed catalog in `src/features/catalog`. The catalog loads Prime Warframes, weapons, Arch-Guns, and Sentinels from [WFCD Warframe Items](https://github.com/WFCD/warframe-items) and caches the index in Redis for an hour. Eight labeled sample records are available if the feed is down. Item details and the optimizer enrich those records with [WFCD relic and mission rewards](https://github.com/WFCD/warframe-drop-data), with labeled sample drops if the feed is unavailable. The optimizer estimates openings from a single relic roll.
+## Local setup
 
-The server reads public [Warframe.market v2 orders](https://docs.warframe.market/docs/api/orders/) for PC. It caches quotes for two minutes, deduplicates concurrent requests, and spaces request starts at least 400 milliseconds apart per server process. Component quotes load on demand. The farm-versus-buy estimate needs a set quote, reported relic mission sources for every component, and the player’s Platinum value per opening. It assumes the selected relics are in hand and excludes squad rewards and relic collection time.
+Use Node.js 22.12 or later, pnpm, and Docker Compose. Set `POSTGRES_PASSWORD` in an ignored `.env` file, then start the database and cache.
 
-# Getting Started
-
-To run this application:
-
-```bash
+```sh
+docker compose up -d postgres redis
 pnpm install
+```
+
+Create an ignored `.env.local` file. Use the same PostgreSQL password in both files and URL-encode it in the connection string if needed.
+
+```dotenv
+DATABASE_URL=postgresql://warframe:YOUR_PASSWORD@127.0.0.1:5432/warframe
+REDIS_URL=redis://127.0.0.1:6378
+BETTER_AUTH_URL=http://localhost:3000
+BETTER_AUTH_SECRET=REPLACE_WITH_A_RANDOM_SECRET
+```
+
+Generate the signing secret with `openssl rand -base64 32`. Always browse at the origin configured in `BETTER_AUTH_URL`.
+
+```sh
+pnpm db:migrate
 pnpm dev
 ```
 
-# Building For Production
+Open `/app` to register. For local admin testing, `pnpm db:admin` creates or verifies `admin@orbital.test` and saves the generated password in `.admin-credentials.local`. Running the bootstrap in production requires explicit authorization via `ALLOW_ADMIN_BOOTSTRAP=1`.
 
-To build this application for production:
+## Data and planning
 
-```bash
+- Public equipment and relic pages are server-rendered. The relic database sends a paginated projection or a single relic record to the browser.
+- WFCD equipment, relic rewards, and mission sources are fresh for an hour. Redis retains successful snapshots for 30 days, with stale data labeled in the UI. An empty production cache and an unavailable upstream produce an unavailable state. `WARFRAME_FIXTURES=1` enables the equipment fixtures in development or tests only. [WFCD equipment](https://github.com/WFCD/warframe-items) · [WFCD drop tables](https://github.com/WFCD/warframe-drop-data)
+- PostgreSQL stores equipment ownership, component inventory, relic inventory by refinement, and farming goals separately. New equipment records use WFCD source IDs. Migrations copy legacy inventory and wishlist rows using their existing slugs and retain the original tables in `orbital_archive`. Legacy history stays archived. Completing a goal records equipment ownership without consuming components.
+- Goal progress is independent per goal. Shared components and relics are never reserved. The optimizer calculates a per-part plan, including the chance of obtaining all missing copies over repeated opportunities. Squad odds assume independent rolls and one selected reward per opening.
+- Time ranking needs player-entered time per opening and per relic collection opportunity. It assumes a common collection duration for compared missions and estimates the collection shortfall after using owned relics when inventory is enabled. Trace costs are measured from Intact. The reports omit acquisition time for Void Traces, and mission reward tables may omit other acquisition sources. Missing sources imply unknown availability.
+- TanStack Query loads prices separately from page rendering. The server uses the official Warframe.market item catalog to map component and set names to published identifiers. It uses PC sell listings, which can change and may have insufficient stock for multiple copies. Fresh quotes last two minutes, last-known observations up to one day, and confirmed negative results five minutes. [Warframe.market API](https://docs.warframe.market/docs/intro/)
+
+## Deployment
+
+```sh
+pnpm build
+node --env-file=.env.local .output/server/index.mjs
+```
+
+Set production environment variables through the hosting platform. Configure `BETTER_AUTH_URL` to the public HTTPS origin so Better Auth uses secure cookies. Use a trusted reverse proxy that replaces its client IP header, then configure `AUTH_TRUSTED_IP_HEADER` to that header. Without this setting, production requests share a rate-limit bucket per auth path. Session-bound operations use private, no-store responses. Registration works with email and password. Verification and password recovery require a transactional email provider and are currently unavailable.
+
+All production instances must share one Redis market coordination namespace and database. Redis enforces a global 400 ms start interval, bounded admission and waiting, request leases, and shared upstream backoff. If Redis is unavailable, retained quotes can still be shown and upstream market requests are paused. `MARKET_COORDINATION=local` explicitly enables in-process coordination for single-instance development when no Redis client is available. It has no effect in production.
+
+The market integration identifies itself in its User-Agent and uses the public API budget. Review the current API rules and contact the maintainers through their listed channel before launching publicly if usage or approval is unclear. The integration has not been reviewed by the Warframe.market team. [Warframe.market rules and contact](https://docs.warframe.market/docs/rules/overview/)
+
+## Checks
+
+```sh
+pnpm check
+pnpm exec tsc --noEmit
+pnpm test
 pnpm build
 ```
 
-## Styling
+Automated tests mock upstream market calls. To also run the service integration tests, set `ORBITAL_POSTGRES_TEST=1` with a PostgreSQL account that can create a disposable database, and set `ORBITAL_TEST_REDIS_URL` to a disposable empty Redis instance. Never point the Redis test at the app’s shared market namespace.
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
-
-### Removing Tailwind CSS
-
-If you prefer not to use Tailwind CSS:
-
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Remove `@tailwindcss/vite` and `tailwindcss` from `package.json`
-
-## Linting & Formatting
-
-This project uses [Biome](https://biomejs.dev/) for linting and formatting. The following scripts are available:
-
-
-```bash
-pnpm lint
-pnpm format
-pnpm check
+```sh
+ORBITAL_POSTGRES_TEST=1 ORBITAL_TEST_REDIS_URL=redis://127.0.0.1:16389 \
+  node --env-file=.env.local node_modules/vitest/vitest.mjs run --config vitest.config.ts
 ```
-
-
-## Deploy with Nitro
-
-This project uses Nitro as a generic server adapter, so it can run on any Node-compatible host.
-
-```bash
-npm run build
-node .output/server/index.mjs
-```
-
-The build output is a self-contained Node server. To deploy, push the `.output/` directory to your host (Render, Fly.io, your own VPS, etc.) and run the server command above.
-
-For host-specific presets (Vercel, Netlify, Cloudflare, AWS Lambda, etc.) and tuning, see https://v3.nitro.build/deploy.
-
-
-## Shadcn
-
-Add components using the latest version of [Shadcn](https://ui.shadcn.com/).
-
-```bash
-pnpm dlx shadcn@latest add button
-```
-
-
-## Local database
-
-Set `POSTGRES_PASSWORD` in the ignored `.env` file, then run `docker compose up -d postgres`. PostgreSQL binds only to localhost and stores data in the Compose volume. Use the same password in `DATABASE_URL` in `.env.local`.
-
-## Local Redis cache
-
-Run `docker compose up -d redis` and set `REDIS_URL=redis://127.0.0.1:6378` in `.env.local` when running the app on the host. Redis shares WFCD responses for one hour and Warframe.market quotes for two minutes across app processes. Request deduplication and market pacing stay per process. The server falls back to its in-memory cache when Redis is unavailable or the URL is unset.
-
-## Local accounts
-
-Set `DATABASE_URL` and `BETTER_AUTH_URL` in `.env.local` to point to the local PostgreSQL service and the app. Generate `BETTER_AUTH_SECRET` with `openssl rand -base64 32`. Run the migrations, then bootstrap and verify the test administrator.
-
-```bash
-pnpm db:migrate
-pnpm db:admin
-```
-
-Sign in at `/app` as `admin@orbital.test`. The bootstrap writes the generated password to the ignored `.admin-credentials.local` file with owner-only permissions. The personal workspace stores item quantities, wishlist entries, and the most recent acquisition date per item. Each read and write checks the session and scopes records to its user.
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
-
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).

@@ -3,15 +3,18 @@ import { ArrowLeft, ChartNoAxesCombined, FileText } from "lucide-react";
 import { RetroPanel, StatusBar } from "#/components/retro/controls";
 import { ItemIcon } from "#/components/retro/item-icon";
 import { Window } from "#/components/retro/window";
+import { useRecordRecent } from "#/features/home/recent";
 import {
 	describeSource,
 	dropDataLabel,
 	getDropChance,
 	prioritizeSources,
 } from "./catalog";
-import type { CatalogItem } from "./models";
+import { type CatalogItem, componentId } from "./models";
+import { MarketPrices } from "./prices";
 
 export function ItemDetails({ item }: { item: CatalogItem }) {
+	useRecordRecent(item.slug, item.name);
 	return (
 		<Window
 			title={`${item.name} — File Properties`}
@@ -37,6 +40,22 @@ export function ItemDetails({ item }: { item: CatalogItem }) {
 					>
 						<ChartNoAxesCombined size={16} aria-hidden="true" /> Plan farming
 						strategy
+					</Link>
+				</div>
+				<div className="phase-toolbar action-row">
+					<Link
+						to="/app"
+						search={{ view: "equipment", pick: item.slug }}
+						className="retro-button"
+					>
+						Track equipment
+					</Link>
+					<Link
+						to="/app"
+						search={{ view: "goals", pick: item.slug }}
+						className="retro-button"
+					>
+						Add farming goal
 					</Link>
 				</div>
 				<div className="details-layout">
@@ -68,7 +87,19 @@ export function ItemDetails({ item }: { item: CatalogItem }) {
 										).slice(0, 3);
 										return (
 											<tr key={part.name}>
-												<th scope="row">{part.name}</th>
+												<th scope="row">
+													{part.name}{" "}
+													<Link
+														className="back-link"
+														to="/app"
+														search={{
+															view: "parts",
+															pick: componentId(item.slug, part),
+														}}
+													>
+														Track
+													</Link>
+												</th>
 												<td className="numeric">{part.quantity}</td>
 												<td>
 													{sources.length
@@ -102,26 +133,7 @@ export function ItemDetails({ item }: { item: CatalogItem }) {
 						</p>
 					</section>
 					<section>
-						<h2 className="section-caption">Market set price</h2>
-						<RetroPanel className="text-panel">
-							{item.market ? (
-								<>
-									<strong>{item.market.platinum} Platinum</strong>
-									<p>
-										Lowest listed sell order · {item.market.platform} ·{" "}
-										<time dateTime={item.market.observedAt}>
-											{item.market.observedAt.slice(0, 16).replace("T", " ")}{" "}
-											UTC
-										</time>
-									</p>
-								</>
-							) : (
-								<>
-									<strong>Price unavailable</strong>
-									<p>No current PC set quote from Warframe.market.</p>
-								</>
-							)}
-						</RetroPanel>
+						<MarketPrices slug={item.slug} />
 					</section>
 				</div>
 			</div>

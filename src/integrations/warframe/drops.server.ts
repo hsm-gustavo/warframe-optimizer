@@ -1,18 +1,18 @@
 import { z } from "zod";
-import type {
-	CatalogItem,
-	DropRarity,
-	DropSource,
-	Refinement,
+import {
+	type CatalogItem,
+	type MissionDrop,
+	type Refinement,
+	type RelicRecord,
+	refinements,
+	rewardName,
 } from "#/features/catalog/models";
-import { refinements } from "#/features/catalog/models";
-import { createTimedLookup } from "./cache.server";
+import { createSnapshot } from "./cache.server";
 
 const reward = z.object({
 	itemName: z.string(),
 	chance: z.number().min(0).max(100),
 });
-const refinementsSchema = z.enum(refinements);
 const relicFeed = z.object({
 	relics: z.array(
 		z.object({
@@ -23,7 +23,6 @@ const relicFeed = z.object({
 		}),
 	),
 });
-const rewardPool = z.array(reward);
 const missionFeed = z.object({
 	missionRewards: z.record(
 		z.string(),
@@ -31,58 +30,93 @@ const missionFeed = z.object({
 			z.string(),
 			z.object({
 				isEvent: z.boolean().optional(),
-				rewards: z.union([rewardPool, z.record(z.string(), rewardPool)]),
+				rewards: z.union([
+					z.array(reward),
+					z.record(z.string(), z.array(reward)),
+				]),
 			}),
 		),
 	),
 });
 
-async function getFeed<T>(file: string, schema: z.ZodType<T>): Promise<T> {
+async function getFeed<T>(file: string, schema: z.ZodType<T>) {
 	const response = await fetch(
 		`https://drops.warframestat.us/data/${file}.json`,
-		{ signal: AbortSignal.timeout(3500) },
+		{ signal: AbortSignal.timeout(5000) },
 	);
 	if (!response.ok) throw new Error(`WFCD returned ${response.status}`);
 	return schema.parse(await response.json());
 }
 
-const getRelics = createTimedLookup(
-	"wfcd:relics",
-	() => getFeed("relics", relicFeed),
+const getRewards = createSnapshot(
+	"relic-rewards",
+	async () => {
+		const feed = await getFeed("relics", relicFeed);
+		const records = new Map<
+			string,
+			{
+				name: string;
+				era: string;
+				rewards: Map<string, Partial<Record<Refinement, number>>>;
+			}
+		>();
+		for (const relic of feed.relics) {
+			const state = refinements.find((entry) => entry === relic.state);
+			if (!state || !relic.relicName) continue;
+			const name = `${relic.tier} ${relic.relicName}`;
+			const id = name.toLowerCase().replaceAll(" ", "-");
+			const record = records.get(id) ?? {
+				name,
+				era: relic.tier,
+				rewards: new Map(),
+			};
+			for (const reward of relic.rewards) {
+				const probabilities = record.rewards.get(reward.itemName) ?? {};
+				probabilities[state] = reward.chance;
+				record.rewards.set(reward.itemName, probabilities);
+			}
+			records.set(id, record);
+		}
+		if (!records.size) throw new Error("WFCD returned an empty relic index.");
+		return Array.from(records, ([id, { name, era, rewards }]) => ({
+			id,
+			name,
+			era,
+			rewards: Array.from(rewards, ([name, probabilities]) => ({
+				name,
+				probabilities,
+			})),
+		})).sort((a, b) => a.name.localeCompare(b.name, "en", { numeric: true }));
+	},
 	3_600_000,
-	60_000,
+	30 * 86_400_000,
 );
 
-type MissionDrop = { location: string; rotation?: string; probability: number };
-
-const getMissions = createTimedLookup(
-	"wfcd:missions",
+const getMissions = createSnapshot(
+	"relic-missions-all",
 	async () => {
 		const { missionRewards } = await getFeed("missionRewards", missionFeed);
-		const missions = new Map<string, MissionDrop>();
-
+		const missions = new Map<string, MissionDrop[]>();
 		for (const [planet, nodes] of Object.entries(missionRewards)) {
 			for (const [node, mission] of Object.entries(nodes)) {
-				if (mission.isEvent) continue;
 				const pools = Array.isArray(mission.rewards)
 					? [["", mission.rewards] as const]
 					: Object.entries(mission.rewards);
 				for (const [rotation, rewards] of pools) {
-					const seen = new Set<string>();
-					for (const reward of rewards) {
-						if (
-							!reward.itemName.endsWith(" Relic") ||
-							seen.has(reward.itemName)
-						)
-							continue;
-						seen.add(reward.itemName);
-						const best = missions.get(reward.itemName);
-						if (best && best.probability >= reward.chance) continue;
-						missions.set(reward.itemName, {
+					const unique = new Map(
+						rewards
+							.filter((reward) => reward.itemName.endsWith(" Relic"))
+							.map((reward) => [reward.itemName, reward.chance]),
+					);
+					for (const [name, probability] of unique) {
+						const sources = missions.get(name) ?? [];
+						sources.push({
 							location: `${node}, ${planet}`,
 							rotation: rotation || undefined,
-							probability: reward.chance,
+							event: mission.isEvent || undefined,
+							probability,
 						});
+						missions.set(name, sources);
 					}
 				}
 			}
@@ -90,71 +124,67 @@ const getMissions = createTimedLookup(
 		return Object.fromEntries(missions);
 	},
 	3_600_000,
-	60_000,
+	30 * 86_400_000,
 );
 
-// WFCD's rarity labels may differ from the published chance for individual rewards.
-function rarityFromIntactChance(
-	chance: number | undefined,
-): DropRarity | undefined {
-	if (chance === undefined) return undefined;
-	if (chance >= 24 && chance <= 26) return "Common";
-	if (chance === 11) return "Uncommon";
-	if (chance === 2) return "Rare";
+export async function getRelicIndex() {
+	const rewards = await getRewards();
+	return {
+		records: rewards?.data ?? [],
+		stale: rewards?.stale ?? false,
+		observedAt: rewards?.observedAt,
+	};
+}
+
+export async function getRelicRecords(): Promise<{
+	records: RelicRecord[];
+	stale: boolean;
+	observedAt?: string;
+}> {
+	const [rewards, missions] = await Promise.all([getRewards(), getMissions()]);
+	return {
+		stale: Boolean(rewards?.stale || missions?.stale),
+		observedAt: rewards?.observedAt,
+		records: (rewards?.data ?? []).map((record) => {
+			const sources = missions?.data[`${record.name} Relic`] ?? [];
+			return {
+				...record,
+				missions: sources,
+				availability:
+					sources.some((source) => !source.event) && !missions?.stale
+						? "reported"
+						: "unknown",
+			};
+		}),
+	};
 }
 
 export async function withLiveDrops(item: CatalogItem): Promise<CatalogItem> {
-	const [feed, missions] = await Promise.all([
-		getRelics(undefined),
-		getMissions(undefined),
-	]);
-	if (!feed) return item;
-
-	const targets = new Map(
-		item.components.map((part) => {
-			const blueprint =
-				item.category === "Warframe" && part.name !== "Blueprint"
-					? " Blueprint"
-					: "";
-			return [
-				`${item.name} ${part.name}${blueprint}`,
-				new Map<string, Partial<Record<Refinement, number>>>(),
-			];
-		}),
-	);
-
-	for (const relic of feed.relics) {
-		const state = refinementsSchema.safeParse(relic.state);
-		if (!state.success || !relic.relicName) continue;
-		const name = `${relic.tier} ${relic.relicName}`;
-		for (const reward of relic.rewards) {
-			const sources = targets.get(reward.itemName);
-			if (!sources) continue;
-			const chance = sources.get(name) ?? {};
-			chance[state.data] = reward.chance;
-			sources.set(name, chance);
-		}
-	}
-
+	const { records, observedAt, stale } = await getRelicRecords();
+	if (!observedAt) return item;
 	return {
 		...item,
-		dropData: "wfcd",
-		components: item.components.map((part) => {
-			const blueprint =
-				item.category === "Warframe" && part.name !== "Blueprint"
-					? " Blueprint"
-					: "";
-			const sources = targets.get(`${item.name} ${part.name}${blueprint}`);
-			const relics: DropSource[] = Array.from(
-				sources ?? [],
-				([name, probabilities]) => ({
-					kind: "relic",
-					relic: { name, missionDrop: missions?.[`${name} Relic`] },
-					probabilities,
-					rarity: rarityFromIntactChance(probabilities.Intact),
-				}),
-			);
-			return { ...part, sources: relics };
-		}),
+		dropData: stale ? "stale" : "wfcd",
+		components: item.components.map((part) => ({
+			...part,
+			sources: records.flatMap((record) => {
+				const reward = record.rewards.find(
+					(entry) => entry.name === rewardName(item, part),
+				);
+				return reward
+					? [
+							{
+								kind: "relic" as const,
+								probabilities: reward.probabilities,
+								relic: {
+									id: record.id,
+									name: record.name,
+									missions: record.missions,
+								},
+							},
+						]
+					: [];
+			}),
+		})),
 	};
 }
